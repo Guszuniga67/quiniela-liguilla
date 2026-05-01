@@ -474,6 +474,17 @@ app.post('/api/admin/assign-matches', (req, res) => {
 // ========== CIERRE AUTOMÁTICO ==========
 setInterval(verificarCierreAutomatico, 60000);
 
+// ========== RESPALDAR BASE DE DATOS ==========
+app.get('/api/backup-db', (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'admin') return res.status(403);
+    
+    const fs = require('fs');
+    const backupPath = path.join(__dirname, 'backup_' + Date.now() + '.db');
+    
+    fs.copyFileSync(path.join(__dirname, 'quiniela.db'), backupPath);
+    res.download(backupPath, 'quiniela_respaldo.db');
+});
+
 // ========== INICIAR SERVIDOR ==========
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
