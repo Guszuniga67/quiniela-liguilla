@@ -35,6 +35,10 @@
         .match-teams { font-weight: bold; font-size: 16px; margin-bottom: 8px; }
         .flex-row { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; }
         .master-box { background: #fef3c7; padding: 15px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #f59e0b; }
+        .table-container { overflow-x: auto; margin-top: 20px; }
+        .pronosticos-table { min-width: 600px; }
+        .pronosticos-table th, .pronosticos-table td { padding: 8px; text-align: center; border: 1px solid #ddd; }
+        .pronosticos-table th { background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -49,6 +53,7 @@
             <div class="tab" onclick="showTab('partidos')">⚽ Partidos</div>
             <div class="tab" onclick="showTab('usuarios')">👥 Usuarios</div>
             <div class="tab" onclick="showTab('codigo')">🔑 Código de registro</div>
+            <div class="tab" onclick="showTab('pronosticos')">📋 Pronósticos por usuario</div>
         </div>
         
         <!-- Jornadas -->
@@ -99,9 +104,11 @@
             <div class="card">
                 <h3>👥 Usuarios registrados</h3>
                 <button onclick="loadUsers()">🔄 Actualizar lista</button>
-                <div style="margin-top: 20px;">
+                <div style="margin-top: 20px; overflow-x: auto;">
                     <table style="width:100%">
-                        <thead><tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Fecha registro</th></tr></thead>
+                        <thead>
+                            <tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Fecha registro</th></tr>
+                        </thead>
                         <tbody id="usersList"></tbody>
                     </table>
                 </div>
@@ -123,6 +130,20 @@
                 <button onclick="loadMasterCode()">🔄 Cargar código actual</button>
             </div>
         </div>
+        
+        <!-- Pronósticos por usuario -->
+        <div id="pronosticos" class="tab-content">
+            <div class="card">
+                <h3>📋 Pronósticos por usuario</h3>
+                <div class="flex-row">
+                    <select id="jornadaSelectPronosticos" onchange="loadPronosticosPorUsuario()" style="min-width: 200px;">
+                        <option>Cargando jornadas...</option>
+                    </select>
+                    <button onclick="loadPronosticosPorUsuario()">🔄 Cargar</button>
+                </div>
+                <div id="pronosticosContent" class="table-container"></div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -134,14 +155,23 @@
             const jornadas = await res.json();
             const container = document.getElementById('jornadasList');
             container.innerHTML = '';
+            
+            const selectPartidos = document.getElementById('jornadaSelectPartidos');
+            const selectPronosticos = document.getElementById('jornadaSelectPronosticos');
+            
+            selectPartidos.innerHTML = '<option value="">Selecciona una jornada</option>';
+            selectPronosticos.innerHTML = '<option value="">Selecciona una jornada</option>';
+            
             jornadas.forEach(j => {
-                const closeTimeDisplay = j.close_time ? new Date(j.close_time).toLocaleString() : 'No configurado';
+                selectPartidos.innerHTML += `<option value="${j.id}">${j.name}</option>`;
+                selectPronosticos.innerHTML += `<option value="${j.id}">${j.name}</option>`;
+                
                 container.innerHTML += `
                     <div class="match-card">
                         <div class="match-teams">${j.name}</div>
                         <div>📅 Publicada: ${j.published ? '✅ Sí' : '⏳ No'}</div>
                         <div>🔒 Pronósticos: ${j.closed ? 'Cerrados' : 'Abiertos'}</div>
-                        <div>⏰ Cierre auto: ${closeTimeDisplay}</div>
+                        <div>⏰ Cierre auto: ${j.close_time ? new Date(j.close_time).toLocaleString() : 'No configurado'}</div>
                         <div style="margin-top: 10px;">
                             ${!j.published ? `<button onclick="publishJornada(${j.id})">📢 Publicar</button>` : ''}
                             <button onclick="toggleCloseJornada(${j.id}, ${!j.closed})" style="background: ${j.closed ? '#f59e0b' : '#10b981'}">
@@ -152,12 +182,6 @@
                         </div>
                     </div>
                 `;
-            });
-            
-            const select = document.getElementById('jornadaSelectPartidos');
-            select.innerHTML = '<option value="">Selecciona una jornada</option>';
-            jornadas.forEach(j => {
-                select.innerHTML += `<option value="${j.id}">${j.name}</option>`;
             });
         }
         
@@ -189,7 +213,7 @@
             if (confirm(`¿${cerrar ? 'Cerrar' : 'Abrir'} los pronósticos para esta jornada?\n\n${cerrar ? '⚠️ Los usuarios ya NO podrán modificar sus pronósticos.' : '✅ Los usuarios podrán modificar sus pronósticos nuevamente.'}`)) {
                 const res = await fetch(`/api/admin/jornada/${id}/toggle-close`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type':application/json' },
                     body: JSON.stringify({ closed: cerrar ? 1 : 0 })
                 });
                 if (res.ok) {
@@ -378,7 +402,7 @@
             const tbody = document.getElementById('usersList');
             tbody.innerHTML = '';
             users.forEach(u => {
-                tbody.innerHTML += `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td><td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td></table>`;
+                tbody.innerHTML += `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td><td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td></tr>`;
             });
         }
         
@@ -404,6 +428,53 @@
             }
         }
         
+        // ========== PRONÓSTICOS POR USUARIO ==========
+        async function loadPronosticosPorUsuario() {
+            const jornadaId = document.getElementById('jornadaSelectPronosticos').value;
+            if (!jornadaId) return;
+            
+            const res = await fetch(`/api/admin/predictions-by-jornada/${jornadaId}`);
+            const data = await res.json();
+            
+            if (!data.partidos || data.partidos.length === 0) {
+                document.getElementById('pronosticosContent').innerHTML = '<div class="match-card">📭 No hay partidos en esta jornada</div>';
+                return;
+            }
+            
+            let html = '<table class="pronosticos-table" style="width:100%; border-collapse: collapse;">';
+            html += '<thead><tr><th style="padding:8px; border:1px solid #ddd;">Usuario</th>';
+            
+            data.partidos.forEach(p => {
+                const resultado = p.status === 'finished' ? `<br>🏁 ${p.home_score}-${p.away_score}` : '';
+                html += `<th style="padding:8px; border:1px solid #ddd;">${p.home_team}<br>vs<br>${p.away_team}${resultado}</th>`;
+            });
+            html += '<th style="padding:8px; border:1px solid #ddd;">Puntos</th></tr></thead><tbody>';
+            
+            data.usuarios.forEach(u => {
+                html += `<tr>`;
+                html += `<td style="padding:8px; border:1px solid #ddd;"><strong>${u.username}</strong></td>`;
+                let totalPuntos = 0;
+                data.partidos.forEach(p => {
+                    const pred = data.predicciones[u.id]?.[p.id];
+                    if (pred) {
+                        const puntosStyle = pred.points === 3 ? 'color:#10b981; font-weight:bold;' : (pred.points === 1 ? 'color:#f59e0b;' : '');
+                        html += `<td style="padding:8px; text-align:center; border:1px solid #ddd;">
+                                    ${pred.home} - ${pred.away}<br>
+                                    <span style="${puntosStyle}">🎯 +${pred.points}</span>
+                                  </td>`;
+                        totalPuntos += pred.points;
+                    } else {
+                        html += `<td style="padding:8px; text-align:center; border:1px solid #ddd; color:#999;">-</td>`;
+                    }
+                });
+                html += `<td style="padding:8px; text-align:center; border:1px solid #ddd;"><strong>${totalPuntos}</strong></td>`;
+                html += `</tr>`;
+            });
+            
+            html += '</tbody></table>';
+            document.getElementById('pronosticosContent').innerHTML = html;
+        }
+        
         // ========== GENERAL ==========
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -414,6 +485,7 @@
             if (tabName === 'usuarios') loadUsers();
             if (tabName === 'codigo') loadMasterCode();
             if (tabName === 'partidos') loadJornadas();
+            if (tabName === 'pronosticos') loadJornadas();
         }
         
         async function logout() {

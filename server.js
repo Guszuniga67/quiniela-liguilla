@@ -102,11 +102,10 @@ function verificarCierreAutomatico() {
     }
 }
 
-// ========== RUTA PARA REPARAR BASE DE DATOS (SIN AUTENTICACIÓN) ==========
+// ========== RUTA PARA REPARAR BASE DE DATOS ==========
 app.get('/api/recrear-tabla', (req, res) => {
     console.log("--- INICIANDO REPARACIÓN DE BASE DE DATOS ---");
     try {
-        // Eliminar y recrear la tabla predictions
         db.exec("DROP TABLE IF EXISTS predictions");
         db.exec(`CREATE TABLE predictions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,7 +117,6 @@ app.get('/api/recrear-tabla', (req, res) => {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, match_id)
         )`);
-        
         console.log("✅ Tabla predictions recreada correctamente");
         res.send(`
             <h2>✅ Base de datos reparada correctamente</h2>
@@ -357,6 +355,83 @@ app.get('/api/admin/matches/:jornadaId', (req, res) => {
     res.json(rows || []);
 });
 
+// ========== NUEVA RUTA: PRONÓSTICOS POR USUARIO (ADMIN) ==========
+app.get('/api/admin/predictions-by-jornada/:jornadaId', (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'admin') return res.status(403);
+    
+    const jornadaId = req.params.jornadaId;
+    
+    // Obtener todos los partidos de la jornada
+    const partidos = db.prepare("SELECT id, home_team, away_team, home_score, away_score, status FROM matches WHERE jornada_id = ? ORDER BY id").all(jornadaId);
+    
+    // Obtener todos los usuarios (excepto admin)
+    const usuarios = db.prepare("SELECT id, username FROM users WHERE role != 'admin' ORDER BY username").all();
+    
+    // Obtener todos los pronósticos de esa jornada
+    const predicciones = db.prepare(`
+        SELECT p.user_id, p.match_id, p.home_pred, p.away_pred, p.points
+        FROM predictions p
+        JOIN matches m ON p.match_id = m.id
+        WHERE m.jornada_id = ?
+    `).all(jornadaId);
+    
+    // Armar la matriz de datos
+    const resultado = {
+        partidos: partidos,
+        usuarios: usuarios,
+        predicciones: {}
+    };
+    
+    // Organizar predicciones por usuario y partido
+    predicciones.forEach(p => {
+        if (!resultado.predicciones[p.user_id]) {
+            resultado.predicciones[p.user_id] = {};
+        }
+        resultado.predicciones[p.user_id][p.match_id] = {
+            home: p.home_pred,
+            away: p.away_pred,
+            points: p.points
+        };
+    });
+    
+    res.json(resultado);
+});
+
+// ========== NUEVA RUTA: PRONÓSTICOS DETALLADOS PARA USUARIOS ==========
+app.get('/api/jornada/:jornadaId/predictions-detail', (req, res) => {
+    if (!req.session.user) return res.status(401);
+    
+    const jornadaId = req.params.jornadaId;
+    
+    const partidos = db.prepare("SELECT id, home_team, away_team, home_score, away_score, status FROM matches WHERE jornada_id = ? ORDER BY id").all(jornadaId);
+    const usuarios = db.prepare("SELECT id, username FROM users WHERE role != 'admin' ORDER BY username").all();
+    const predicciones = db.prepare(`
+        SELECT p.user_id, p.match_id, p.home_pred, p.away_pred, p.points
+        FROM predictions p
+        JOIN matches m ON p.match_id = m.id
+        WHERE m.jornada_id = ?
+    `).all(jornadaId);
+    
+    const resultado = {
+        partidos: partidos,
+        usuarios: usuarios,
+        predicciones: {}
+    };
+    
+    predicciones.forEach(p => {
+        if (!resultado.predicciones[p.user_id]) {
+            resultado.predicciones[p.user_id] = {};
+        }
+        resultado.predicciones[p.user_id][p.match_id] = {
+            home: p.home_pred,
+            away: p.away_pred,
+            points: p.points
+        };
+    });
+    
+    res.json(resultado);
+});
+
 // ========== RUTAS DE API EXTERNA ==========
 app.get('/api/fetch-available-matches', async (req, res) => {
     if (!req.session.user || req.session.user.role !== 'admin') return res.status(403);
@@ -407,5 +482,6 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🔑 Código maestro: LIGUILLA2026`);
     console.log(`⚽ PUNTOS: 3 exacto, 1 resultado`);
     console.log(`🌐 API configurada`);
-    console.log(`🔧 Ruta de reparación: /api/recrear-tabla\n`);
+    console.log(`🔧 Ruta de reparación: /api/recrear-tabla`);
+    console.log(`📋 Nueva: Pronósticos por usuario en /api/admin/predictions-by-jornada/:id\n`);
 });
