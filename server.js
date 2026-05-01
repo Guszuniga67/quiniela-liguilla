@@ -367,6 +367,40 @@ app.post('/api/admin/assign-matches', (req, res) => {
 // ========== CIERRE AUTOMÁTICO ==========
 setInterval(verificarCierreAutomatico, 60000);
 
+// ========== RECONSTRUIR TABLA PREDICTIONS ==========
+app.get('/api/recrear-tabla', (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'admin') return res.status(403);
+    try {
+        // Guardar pronósticos existentes temporalmente
+        const predicciones = db.prepare("SELECT * FROM predictions").all();
+        
+        // Eliminar tabla vieja
+        db.exec("DROP TABLE IF EXISTS predictions");
+        
+        // Crear tabla nueva con la estructura correcta
+        db.exec(`CREATE TABLE predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            match_id INTEGER,
+            home_pred INTEGER,
+            away_pred INTEGER,
+            points INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, match_id)
+        )`);
+        
+        // Restaurar predicciones si existían
+        for (const pred of predicciones) {
+            db.prepare(`INSERT OR IGNORE INTO predictions (id, user_id, match_id, home_pred, away_pred, points) 
+                VALUES (?, ?, ?, ?, ?, ?)`).run(pred.id, pred.user_id, pred.match_id, pred.home_pred, pred.away_pred, pred.points);
+        }
+        
+        res.json({ success: true, message: "Tabla predictions reconstruida correctamente" });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ========== INICIAR SERVIDOR ==========
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
