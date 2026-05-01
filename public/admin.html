@@ -36,7 +36,7 @@
         .flex-row { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; }
         .master-box { background: #fef3c7; padding: 15px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #f59e0b; }
         .table-container { overflow-x: auto; margin-top: 20px; }
-        .pronosticos-table { min-width: 600px; }
+        .pronosticos-table { min-width: 600px; width: 100%; border-collapse: collapse; }
         .pronosticos-table th, .pronosticos-table td { padding: 8px; text-align: center; border: 1px solid #ddd; }
         .pronosticos-table th { background: #f1f5f9; }
     </style>
@@ -49,15 +49,15 @@
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="showTab('jornadas')">📅 Jornadas</div>
-            <div class="tab" onclick="showTab('partidos')">⚽ Partidos</div>
-            <div class="tab" onclick="showTab('usuarios')">👥 Usuarios</div>
-            <div class="tab" onclick="showTab('codigo')">🔑 Código de registro</div>
-            <div class="tab" onclick="showTab('pronosticos')">📋 Pronósticos por usuario</div>
+            <div class="tab" data-tab="jornadas">📅 Jornadas</div>
+            <div class="tab" data-tab="partidos">⚽ Partidos</div>
+            <div class="tab" data-tab="usuarios">👥 Usuarios</div>
+            <div class="tab" data-tab="codigo">🔑 Código de registro</div>
+            <div class="tab" data-tab="pronosticos">📋 Pronósticos por usuario</div>
         </div>
         
         <!-- Jornadas -->
-        <div id="jornadas" class="tab-content active">
+        <div id="jornadas" class="tab-content">
             <div class="card">
                 <h3>📅 Gestionar Jornadas</h3>
                 <input type="text" id="jornadaName" placeholder="Nombre (ej: Cuartos de Final)">
@@ -149,6 +149,51 @@
     <script>
         let partidosDisponibles = [];
         
+        // ========== INICIALIZACIÓN ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configurar evento de pestañas
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.getAttribute('data-tab');
+                    showTab(tabName);
+                });
+            });
+            
+            // Cargar datos iniciales
+            loadJornadas();
+            loadMasterCode();
+        });
+        
+        // ========== FUNCIÓN PARA CAMBIAR DE PESTAÑA ==========
+        function showTab(tabName) {
+            // Ocultar todos los contenidos
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            // Desactivar todas las pestañas
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            // Mostrar el contenido seleccionado
+            const selectedContent = document.getElementById(tabName);
+            if (selectedContent) {
+                selectedContent.classList.add('active');
+            }
+            // Activar la pestaña seleccionada
+            const selectedTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+            }
+            
+            // Cargar datos según la pestaña
+            if (tabName === 'jornadas') loadJornadas();
+            if (tabName === 'usuarios') loadUsers();
+            if (tabName === 'codigo') loadMasterCode();
+            if (tabName === 'partidos') loadJornadas();
+            if (tabName === 'pronosticos') loadJornadas();
+        }
+        
         // ========== JORNADAS ==========
         async function loadJornadas() {
             const res = await fetch('/api/admin/jornadas');
@@ -159,12 +204,12 @@
             const selectPartidos = document.getElementById('jornadaSelectPartidos');
             const selectPronosticos = document.getElementById('jornadaSelectPronosticos');
             
-            selectPartidos.innerHTML = '<option value="">Selecciona una jornada</option>';
-            selectPronosticos.innerHTML = '<option value="">Selecciona una jornada</option>';
+            if (selectPartidos) selectPartidos.innerHTML = '<option value="">Selecciona una jornada</option>';
+            if (selectPronosticos) selectPronosticos.innerHTML = '<option value="">Selecciona una jornada</option>';
             
             jornadas.forEach(j => {
-                selectPartidos.innerHTML += `<option value="${j.id}">${j.name}</option>`;
-                selectPronosticos.innerHTML += `<option value="${j.id}">${j.name}</option>`;
+                if (selectPartidos) selectPartidos.innerHTML += `<option value="${j.id}">${j.name}</option>`;
+                if (selectPronosticos) selectPronosticos.innerHTML += `<option value="${j.id}">${j.name}</option>`;
                 
                 container.innerHTML += `
                     <div class="match-card">
@@ -209,11 +254,10 @@
         }
         
         async function toggleCloseJornada(id, cerrar) {
-            const accion = cerrar ? 'cerrar' : 'abrir';
-            if (confirm(`¿${cerrar ? 'Cerrar' : 'Abrir'} los pronósticos para esta jornada?\n\n${cerrar ? '⚠️ Los usuarios ya NO podrán modificar sus pronósticos.' : '✅ Los usuarios podrán modificar sus pronósticos nuevamente.'}`)) {
+            if (confirm(`¿${cerrar ? 'Cerrar' : 'Abrir'} los pronósticos para esta jornada?`)) {
                 const res = await fetch(`/api/admin/jornada/${id}/toggle-close`, {
                     method: 'POST',
-                    headers: { 'Content-Type':application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ closed: cerrar ? 1 : 0 })
                 });
                 if (res.ok) {
@@ -224,7 +268,7 @@
         }
         
         function configurarCierreAuto(jornadaId) {
-            const fechaInput = prompt('Ingresa fecha y hora de cierre (ej: 2026-05-03 18:00)\n\n⚠️ A esa hora se cerrarán automáticamente los pronósticos');
+            const fechaInput = prompt('Ingresa fecha y hora de cierre (ej: 2026-05-03 18:00)');
             if (fechaInput) {
                 const fecha = new Date(fechaInput);
                 if (isNaN(fecha.getTime())) {
@@ -402,7 +446,7 @@
             const tbody = document.getElementById('usersList');
             tbody.innerHTML = '';
             users.forEach(u => {
-                tbody.innerHTML += `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td><td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td></tr>`;
+                tbody.innerHTML += `<tr><td>${u.id}</td><td>${u.username} nonex\n                                <td>${u.role}</td>\n                                <td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td></tr>`;
             });
         }
         
@@ -431,7 +475,10 @@
         // ========== PRONÓSTICOS POR USUARIO ==========
         async function loadPronosticosPorUsuario() {
             const jornadaId = document.getElementById('jornadaSelectPronosticos').value;
-            if (!jornadaId) return;
+            if (!jornadaId) {
+                alert('Selecciona una jornada');
+                return;
+            }
             
             const res = await fetch(`/api/admin/predictions-by-jornada/${jornadaId}`);
             const data = await res.json();
@@ -441,60 +488,55 @@
                 return;
             }
             
-            let html = '<table class="pronosticos-table" style="width:100%; border-collapse: collapse;">';
-            html += '<thead><tr><th style="padding:8px; border:1px solid #ddd;">Usuario</th>';
-            
+            let html = '<table class="pronosticos-table">';
+            html += '<thead><tr>';
+            html += '<th>Usuario</th>';
             data.partidos.forEach(p => {
-                const resultado = p.status === 'finished' ? `<br>🏁 ${p.home_score}-${p.away_score}` : '';
-                html += `<th style="padding:8px; border:1px solid #ddd;">${p.home_team}<br>vs<br>${p.away_team}${resultado}</th>`;
+                const resultado = p.status === 'finished' ? `<br><small>🏁 ${p.home_score}-${p.away_score}</small>` : '';
+                html += `<th>${p.home_team}<br>vs<br>${p.away_team}${resultado}</th>`;
             });
-            html += '<th style="padding:8px; border:1px solid #ddd;">Puntos</th></tr></thead><tbody>';
+            html += '<th>Puntos</th></tr></thead><tbody>';
             
             data.usuarios.forEach(u => {
-                html += `<tr>`;
-                html += `<td style="padding:8px; border:1px solid #ddd;"><strong>${u.username}</strong></td>`;
+                html += '<tr>';
+                html += `<td><strong>${u.username}</strong></td>`;
                 let totalPuntos = 0;
                 data.partidos.forEach(p => {
                     const pred = data.predicciones[u.id]?.[p.id];
                     if (pred) {
                         const puntosStyle = pred.points === 3 ? 'color:#10b981; font-weight:bold;' : (pred.points === 1 ? 'color:#f59e0b;' : '');
-                        html += `<td style="padding:8px; text-align:center; border:1px solid #ddd;">
+                        html += `<td style="text-align:center;">
                                     ${pred.home} - ${pred.away}<br>
-                                    <span style="${puntosStyle}">🎯 +${pred.points}</span>
-                                  </td>`;
+                                    <small style="${puntosStyle}">+${pred.points}</small>
+                                 </td>`;
                         totalPuntos += pred.points;
                     } else {
-                        html += `<td style="padding:8px; text-align:center; border:1px solid #ddd; color:#999;">-</td>`;
+                        html += `<td style="text-align:center; color:#999;">-</td>`;
                     }
                 });
-                html += `<td style="padding:8px; text-align:center; border:1px solid #ddd;"><strong>${totalPuntos}</strong></td>`;
-                html += `</tr>`;
+                html += `<td style="text-align:center;"><strong>${totalPuntos}</strong></td>`;
+                html += '</tr>';
             });
             
             html += '</tbody></table>';
             document.getElementById('pronosticosContent').innerHTML = html;
         }
         
-        // ========== GENERAL ==========
-        function showTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
-            if (tabName === 'jornadas') loadJornadas();
-            if (tabName === 'usuarios') loadUsers();
-            if (tabName === 'codigo') loadMasterCode();
-            if (tabName === 'partidos') loadJornadas();
-            if (tabName === 'pronosticos') loadJornadas();
-        }
-        
+        // ========== CIERRE DE SESIÓN ==========
         async function logout() {
             await fetch('/api/logout', { method: 'POST' });
             window.location.href = '/index.html';
         }
         
-        loadJornadas();
-        loadMasterCode();
+        // ========== ACTIVAR PRIMERA PESTAÑA ==========
+        // Activar la pestaña de Jornadas por defecto
+        setTimeout(() => {
+            const firstTab = document.querySelector('.tab');
+            if (firstTab) {
+                const tabName = firstTab.getAttribute('data-tab');
+                showTab(tabName);
+            }
+        }, 100);
     </script>
 </body>
 </html>
