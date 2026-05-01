@@ -17,6 +17,19 @@ app.use(express.json());
 app.use(express.static('public'));
 app.use(session({ secret: 'secreto-quiniela', resave: false, saveUninitialized: false }));
 
+// ========== FUNCIÓN PARA ACTUALIZAR BASE DE DATOS ==========
+function actualizarBaseDatos() {
+    try {
+        db.exec("ALTER TABLE jornadas ADD COLUMN closed INTEGER DEFAULT 0");
+        console.log("✅ Columna 'closed' agregada");
+    } catch(e) { console.log("ℹ️ Columna 'closed' ya existe"); }
+    
+    try {
+        db.exec("ALTER TABLE jornadas ADD COLUMN close_time TEXT");
+        console.log("✅ Columna 'close_time' agregada");
+    } catch(e) { console.log("ℹ️ Columna 'close_time' ya existe"); }
+}
+
 // ========== CREAR TABLAS ==========
 db.exec(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,8 +48,6 @@ db.exec(`CREATE TABLE IF NOT EXISTS jornadas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
     published INTEGER DEFAULT 0,
-    closed INTEGER DEFAULT 0,
-    close_time TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
@@ -62,6 +73,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS predictions (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
+// Actualizar la base de datos con las nuevas columnas
+actualizarBaseDatos();
+
 // Admin por defecto
 const adminHash = bcrypt.hashSync('admin123', 10);
 db.prepare("INSERT OR IGNORE INTO users (username, password, role) VALUES ('admin', ?, 'admin')").run(adminHash);
@@ -73,13 +87,28 @@ console.log('✅ Base de datos lista');
 
 // ========== FUNCIÓN PARA CIERRE AUTOMÁTICO ==========
 function verificarCierreAutomatico() {
-    const ahora = new Date().toISOString();
-    const jornadas = db.prepare("SELECT id, name, close_time FROM jornadas WHERE published = 1 AND closed = 0 AND close_time IS NOT NULL AND close_time <= ?").all(ahora);
-    jornadas.forEach(j => {
-        db.prepare("UPDATE jornadas SET closed = 1 WHERE id = ?").run(j.id);
-        console.log(`🔒 Jornada "${j.name}" cerrada automáticamente`);
-    });
+    try {
+        const ahora = new Date().toISOString();
+        const jornadas = db.prepare("SELECT id, name, close_time FROM jornadas WHERE published = 1 AND closed = 1 AND close_time IS NOT NULL AND close_time <= ?").all(ahora);
+        jornadas.forEach(j => {
+            db.prepare("UPDATE jornadas SET closed = 1 WHERE id = ?").run(j.id);
+            console.log(`🔒 Jornada "${j.name}" cerrada automáticamente`);
+        });
+    } catch(e) {
+        console.log("Error en cierre automático:", e.message);
+    }
 }
+
+// ========== RUTA PARA REPARAR BASE DE DATOS ==========
+app.get('/api/fix-database', (req, res) => {
+    try {
+        db.exec("ALTER TABLE jornadas ADD COLUMN closed INTEGER DEFAULT 0");
+    } catch(e) {}
+    try {
+        db.exec("ALTER TABLE jornadas ADD COLUMN close_time TEXT");
+    } catch(e) {}
+    res.json({ success: true, message: "Base de datos actualizada" });
+});
 
 // ========== RUTAS PÚBLICAS ==========
 app.post('/api/register', (req, res) => {
@@ -131,8 +160,12 @@ app.get('/api/jornadas', (req, res) => {
 
 app.get('/api/jornada/:id/status', (req, res) => {
     if (!req.session.user) return res.status(401);
-    const row = db.prepare("SELECT closed FROM jornadas WHERE id = ?").get(req.params.id);
-    res.json({ closed: row ? row.closed : 0 });
+    let closed = 0;
+    try {
+        const row = db.prepare("SELECT closed FROM jornadas WHERE id = ?").get(req.params.id);
+        closed = row ? row.closed : 0;
+    } catch(e) { closed = 0; }
+    res.json({ closed });
 });
 
 app.get('/api/matches/:jornadaId', (req, res) => {
@@ -327,10 +360,9 @@ app.post('/api/admin/assign-matches', (req, res) => {
     let asignados = 0;
     for (const matchId of matchesIds) {
         try {
+            const match = db.prepare("SELECT home_team, away_team, datetime FROM (SELECT ? as id, ? as home, ? as away, ? as dt)").get(matchId, '', '', '');
             db.prepare(`INSERT OR IGNORE INTO matches (api_fixture_id, jornada_id, home_team, away_team, datetime, status)
-                SELECT ?, ?, home_team, away_team, datetime, 'pending'
-                FROM (SELECT ? as id, ? as home, ? as away, ? as dt)
-                WHERE NOT EXISTS (SELECT 1 FROM matches WHERE api_fixture_id = ?)`).run(matchId, jornadaId, matchId, '', '', '', matchId);
+                VALUES (?, ?, ?, ?, ?, 'pending')`).run(matchId, jornadaId, '', '', '');
             asignados++;
         } catch(e) {}
     }
