@@ -48,6 +48,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS jornadas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
     published INTEGER DEFAULT 0,
+    closed INTEGER DEFAULT 0,
+    close_time TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
 
@@ -70,7 +72,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS predictions (
     home_pred INTEGER,
     away_pred INTEGER,
     points INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, match_id)
 )`);
 
 // Actualizar la base de datos con las nuevas columnas
@@ -89,7 +92,7 @@ console.log('✅ Base de datos lista');
 function verificarCierreAutomatico() {
     try {
         const ahora = new Date().toISOString();
-        const jornadas = db.prepare("SELECT id, name, close_time FROM jornadas WHERE published = 1 AND closed = 1 AND close_time IS NOT NULL AND close_time <= ?").all(ahora);
+        const jornadas = db.prepare("SELECT id, name, close_time FROM jornadas WHERE published = 1 AND closed = 0 AND close_time IS NOT NULL AND close_time <= ?").all(ahora);
         jornadas.forEach(j => {
             db.prepare("UPDATE jornadas SET closed = 1 WHERE id = ?").run(j.id);
             console.log(`🔒 Jornada "${j.name}" cerrada automáticamente`);
@@ -98,17 +101,6 @@ function verificarCierreAutomatico() {
         console.log("Error en cierre automático:", e.message);
     }
 }
-
-// ========== RUTA PARA REPARAR BASE DE DATOS ==========
-app.get('/api/fix-database', (req, res) => {
-    try {
-        db.exec("ALTER TABLE jornadas ADD COLUMN closed INTEGER DEFAULT 0");
-    } catch(e) {}
-    try {
-        db.exec("ALTER TABLE jornadas ADD COLUMN close_time TEXT");
-    } catch(e) {}
-    res.json({ success: true, message: "Base de datos actualizada" });
-});
 
 // ========== RUTAS PÚBLICAS ==========
 app.post('/api/register', (req, res) => {
@@ -160,12 +152,8 @@ app.get('/api/jornadas', (req, res) => {
 
 app.get('/api/jornada/:id/status', (req, res) => {
     if (!req.session.user) return res.status(401);
-    let closed = 0;
-    try {
-        const row = db.prepare("SELECT closed FROM jornadas WHERE id = ?").get(req.params.id);
-        closed = row ? row.closed : 0;
-    } catch(e) { closed = 0; }
-    res.json({ closed });
+    const row = db.prepare("SELECT closed FROM jornadas WHERE id = ?").get(req.params.id);
+    res.json({ closed: row ? row.closed : 0 });
 });
 
 app.get('/api/matches/:jornadaId', (req, res) => {
@@ -184,13 +172,20 @@ app.get('/api/predictions/:jornadaId', (req, res) => {
 });
 
 app.post('/api/prediction', (req, res) => {
-    if (!req.session.user) return res.status(401);
+    if (!req.session.user) return res.status(401).json({ error: 'No autorizado' });
     const { matchId, homePred, awayPred } = req.body;
-    db.prepare(`INSERT INTO predictions (user_id, match_id, home_pred, away_pred) 
+    
+    try {
+        db.prepare(`INSERT INTO predictions (user_id, match_id, home_pred, away_pred) 
             VALUES (?, ?, ?, ?) 
             ON CONFLICT(user_id, match_id) DO UPDATE SET 
-            home_pred = excluded.home_pred, away_pred = excluded.away_pred`).run(req.session.user.id, matchId, homePred, awayPred);
-    res.json({ success: true });
+            home_pred = excluded.home_pred, away_pred = excluded.away_pred`)
+            .run(req.session.user.id, matchId, homePred, awayPred);
+        res.json({ success: true });
+    } catch(error) {
+        console.error("Error al guardar pronóstico:", error.message);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.get('/api/leaderboard', (req, res) => {
@@ -360,7 +355,7 @@ app.post('/api/admin/assign-matches', (req, res) => {
     let asignados = 0;
     for (const matchId of matchesIds) {
         try {
-            const match = db.prepare("SELECT home_team, away_team, datetime FROM (SELECT ? as id, ? as home, ? as away, ? as dt)").get(matchId, '', '', '');
+            const matchInfo = db.prepare("SELECT home_team, away_team, datetime FROM (SELECT ? as id, '' as home, '' as away, '' as dt)").get(matchId);
             db.prepare(`INSERT OR IGNORE INTO matches (api_fixture_id, jornada_id, home_team, away_team, datetime, status)
                 VALUES (?, ?, ?, ?, ?, 'pending')`).run(matchId, jornadaId, '', '', '');
             asignados++;
