@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiniela Liguilla MX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .login-container {
+            max-width: 450px;
+            margin: 50px auto;
+            background: white;
+            border-radius: 32px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 24px;
+            font-size: 28px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 24px;
+            background: #f1f5f9;
+            border-radius: 16px;
+            padding: 4px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #64748b;
+        }
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 14px;
+            margin: 8px 0;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+        button:hover {
+            background: #5a67d8;
+        }
+        hr {
+            margin: 20px 0;
+            border: none;
+            border-top: 2px solid #e2e8f0;
+        }
+        .info-box {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .success-badge {
+            background: #48bb78;
+            color: white;
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>🏆 Quiniela Liguilla MX 2026</h1>
+        
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('user')">👥 Usuarios</button>
+            <button class="tab-btn" onclick="switchTab('admin')">👑 Administrador</button>
+        </div>
+        
+        <!-- Usuarios -->
+        <div id="userTab" class="tab-content active">
+            <div id="loginSection">
+                <h3>🔐 Iniciar sesión</h3>
+                <input type="text" id="loginUser" placeholder="Usuario">
+                <input type="password" id="loginPass" placeholder="Contraseña">
+                <button onclick="login()">Entrar</button>
+                
+                <hr>
+                
+                <h3>📝 Registrarse</h3>
+                <input type="text" id="regUser" placeholder="Usuario">
+                <input type="password" id="regPass" placeholder="Contraseña">
+                <input type="text" id="inviteCode" placeholder="Código de invitación">
+                <button onclick="register()">Registrarse</button>
+                
+                <div class="info-box">
+                    <p style="font-size: 13px;">📌 Solicita el código de invitación al administrador</p>
+                </div>
+            </div>
+            
+            <div id="userLoggedSection" style="display:none;">
+                <div style="text-align: center; margin: 20px 0;">
+                    <h3>¡Bienvenido! 🎉</h3>
+                    <div id="userNameDisplay" style="font-size: 24px; font-weight: bold; color: #667eea; margin: 10px 0;"></div>
+                </div>
+                <div class="success-badge">
+                    ✅ Has iniciado sesión correctamente
+                </div>
+                <button onclick="logout()" style="background: #ef4444;">Cerrar sesión</button>
+            </div>
+        </div>
+        
+        <!-- Administrador -->
+        <div id="adminTab" class="tab-content">
+            <div>
+                <h3>👑 Acceso Administrador</h3>
+                <div class="info-box" style="background: #fef3c7;">
+                    <p style="font-size: 13px;">🔒 Área restringida</p>
+                </div>
+                <input type="text" id="adminUser" placeholder="Usuario administrador">
+                <input type="password" id="adminPass" placeholder="Contraseña">
+                <button onclick="adminLogin()">Acceder al panel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('userTab').classList.remove('active');
+            document.getElementById('adminTab').classList.remove('active');
+            
+            if (tab === 'user') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('userTab').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('adminTab').classList.add('active');
+            }
+        }
+        
+        async function login() {
+            const username = document.getElementById('loginUser').value;
+            const password = document.getElementById('loginPass').value;
+            
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            
+            if (res.ok && data.role !== 'admin') {
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('userLoggedSection').style.display = 'block';
+                document.getElementById('userNameDisplay').innerText = data.username;
+                localStorage.setItem('userId', data.id);
+                setTimeout(() => { window.location.href = '/user.html'; }, 1500);
+            } else if (data.role === 'admin') {
+                alert('⚠️ Usa la pestaña "Administrador"');
+            } else {
+                alert('❌ Error: ' + data.error);
+            }
+        }
+        
+        async function register() {
+            const username = document.getElementById('regUser').value;
+            const password = document.getElementById('regPass').value;
+            const inviteCode = document.getElementById('inviteCode').value;
+            
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, inviteCode })
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                alert('✅ Registro exitoso. Ahora inicia sesión');
+                document.getElementById('regUser').value = '';
+                document.getElementById('regPass').value = '';
+                document.getElementById('inviteCode').value = '';
+            } else {
+                alert('❌ Error: ' + data.error);
+            }
+        }
+        
+        async function adminLogin() {
+            const username = document.getElementById('adminUser').value;
+            const password = document.getElementById('adminPass').value;
+            
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            
+            if (res.ok && data.role === 'admin') {
+                window.location.href = '/admin.html';
+            } else {
+                alert('❌ Credenciales incorrectas');
+            }
+        }
+        
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('userLoggedSection').style.display = 'none';
+        }
+        
+        async function checkSession() {
+            try {
+                const res = await fetch('/api/me');
+                const data = await res.json();
+                if (data.loggedIn && data.user.role !== 'admin') {
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('userLoggedSection').style.display = 'block';
+                    document.getElementById('userNameDisplay').innerText = data.user.username;
+                }
+            } catch(e) {}
+        }
+        
+        checkSession();
+    </script>
+</body>
+</html>

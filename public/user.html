@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Quiniela - Liguilla MX 2026</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .user-stats {
+            display: flex;
+            gap: 15px;
+            background: rgba(255,255,255,0.2);
+            padding: 6px 16px;
+            border-radius: 40px;
+            font-size: 14px;
+        }
+        .btn { background: white; color: #667eea; border: none; padding: 8px 16px; border-radius: 12px; cursor: pointer; font-weight: 600; }
+        .tabs { display: flex; background: #f1f5f9; padding: 0 20px; gap: 8px; }
+        .tab { padding: 14px 20px; cursor: pointer; font-weight: 600; color: #64748b; border-bottom: 3px solid transparent; }
+        .tab.active { color: #667eea; border-bottom-color: #667eea; background: white; }
+        .tab-content { display: none; padding: 24px; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .match-card { background: #f8fafc; border-radius: 16px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #667eea; }
+        .match-teams { font-weight: bold; font-size: 18px; margin-bottom: 8px; }
+        .match-info { font-size: 12px; color: #666; margin-bottom: 12px; }
+        .match-inputs { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        .match-inputs input { width: 80px; padding: 10px; border: 2px solid #e2e8f0; border-radius: 10px; text-align: center; font-size: 16px; }
+        .match-result { margin-top: 12px; padding: 8px; background: #e2e8f0; border-radius: 8px; display: inline-block; font-size: 14px; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-exact { background: #48bb78; color: white; }
+        .badge-result { background: #f59e0b; color: white; }
+        select { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; margin-bottom: 20px; font-size: 16px; background: white; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; font-weight: 600; }
+        .current-user { background: #e0e7ff; font-weight: bold; }
+        button { background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        button:hover { background: #5a67d8; }
+        .closed-banner { background: #fee2e2; color: #dc2626; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 15px; font-weight: 600; }
+        @media (max-width: 600px) { .match-inputs { flex-direction: column; align-items: flex-start; } .header { flex-direction: column; text-align: center; } .tabs { flex-wrap: wrap; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="font-size: 22px;">🏆 Mi Quiniela 2026</h1>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="user-stats">
+                    📊 <span id="userPoints">0</span> pts | 🎯 <span id="userExactos">0</span> exactos
+                </div>
+                <button class="btn" onclick="logout()">Salir</button>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('quiniela')">📝 Mi Quiniela</div>
+            <div class="tab" onclick="showTab('tabla')">📊 Tabla General</div>
+        </div>
+        
+        <div id="quiniela" class="tab-content active">
+            <select id="jornadaSelect" onchange="loadMatches()">
+                <option>Cargando jornadas...</option>
+            </select>
+            <div id="quinielaContent"></div>
+        </div>
+        
+        <div id="tabla" class="tab-content">
+            <h3>🏆 Clasificación General</h3>
+            <table style="width:100%">
+                <thead><tr><th>#</th><th>Usuario</th><th>Puntos</th><th>Exactos 🎯</th><th>Aciertos ✅</th></tr></thead>
+                <tbody id="leaderboardBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let currentUserId = localStorage.getItem('userId');
+        
+        async function loadUserStats() {
+            try {
+                const res = await fetch('/api/user/stats');
+                const stats = await res.json();
+                document.getElementById('userPoints').innerText = stats.total_puntos || 0;
+                document.getElementById('userExactos').innerText = stats.exactos || 0;
+            } catch(e) { console.log('Error stats'); }
+        }
+        
+        async function loadJornadas() {
+            try {
+                const res = await fetch('/api/jornadas');
+                const jornadas = await res.json();
+                const select = document.getElementById('jornadaSelect');
+                if (jornadas.length === 0) {
+                    select.innerHTML = '<option>No hay jornadas disponibles</option>';
+                    return;
+                }
+                select.innerHTML = '<option value="">📌 Selecciona una jornada</option>';
+                jornadas.forEach(j => {
+                    select.innerHTML += `<option value="${j.id}">🏆 ${j.name}</option>`;
+                });
+                if (jornadas.length > 0) {
+                    select.value = jornadas[0].id;
+                    loadMatches();
+                }
+            } catch(e) { console.log('Error jornadas'); }
+        }
+        
+        async function loadMatches() {
+            const jornadaId = document.getElementById('jornadaSelect').value;
+            if (!jornadaId) return;
+            
+            try {
+                // Verificar si la jornada está cerrada
+                const statusRes = await fetch(`/api/jornada/${jornadaId}/status`);
+                const statusData = await statusRes.json();
+                const isClosed = statusData.closed === 1;
+                
+                const [matchesRes, predictionsRes] = await Promise.all([
+                    fetch(`/api/matches/${jornadaId}`),
+                    fetch(`/api/predictions/${jornadaId}`)
+                ]);
+                
+                const matches = await matchesRes.json();
+                const predictions = await predictionsRes.json();
+                const container = document.getElementById('quinielaContent');
+                
+                if (matches.length === 0) {
+                    container.innerHTML = '<div class="match-card">📭 No hay partidos en esta jornada. El administrador los cargará pronto.</div>';
+                    return;
+                }
+                
+                let html = '';
+                if (isClosed) {
+                    html += '<div class="closed-banner">🔒 Los pronósticos para esta jornada están CERRADOS. No puedes modificar tus pronósticos.</div>';
+                }
+                html += '<h3 style="margin-bottom: 16px;">⚽ Haz tus pronósticos</h3>';
+                
+                matches.forEach(match => {
+                    const pred = predictions.find(p => p.match_id === match.id);
+                    const isFinished = match.status === 'finished';
+                    const fecha = match.datetime ? new Date(match.datetime).toLocaleString('es-MX') : 'Fecha por definir';
+                    
+                    html += `
+                        <div class="match-card">
+                            <div class="match-teams">${match.home_team} vs ${match.away_team}</div>
+                            <div class="match-info">📅 ${fecha}</div>
+                            <div class="match-inputs">
+                                <input type="number" id="home_${match.id}" placeholder="Local" value="${pred?.home_pred || ''}" ${isFinished || isClosed ? 'disabled' : ''}>
+                                <span>vs</span>
+                                <input type="number" id="away_${match.id}" placeholder="Visita" value="${pred?.away_pred || ''}" ${isFinished || isClosed ? 'disabled' : ''}>
+                                ${!isFinished && !isClosed ? `<button onclick="savePrediction(${match.id})">💾 Guardar</button>` : ''}
+                            </div>
+                            ${isFinished ? `<div class="match-result">🏁 Resultado: ${match.home_score} - ${match.away_score}</div>` : ''}
+                            ${pred && pred.points > 0 ? `<div style="margin-top: 10px;"><span class="badge ${pred.points === 3 ? 'badge-exact' : 'badge-result'}">🎯 +${pred.points} punto${pred.points > 1 ? 's' : ''}</span></div>` : ''}
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch(e) {
+                document.getElementById('quinielaContent').innerHTML = '<div class="match-card">❌ Error cargando partidos</div>';
+            }
+        }
+        
+        async function savePrediction(matchId) {
+            const homePred = document.getElementById(`home_${matchId}`).value;
+            const awayPred = document.getElementById(`away_${matchId}`).value;
+            
+            if (!homePred || !awayPred) {
+                alert('❌ Ingresa ambos marcadores');
+                return;
+            }
+            
+            try {
+                const res = await fetch('/api/prediction', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ matchId, homePred: parseInt(homePred), awayPred: parseInt(awayPred) })
+                });
+                
+                if (res.ok) {
+                    alert('✅ Pronóstico guardado');
+                    loadMatches();
+                    loadUserStats();
+                    loadLeaderboard();
+                } else {
+                    alert('❌ Error al guardar');
+                }
+            } catch(e) {
+                alert('❌ Error de conexión');
+            }
+        }
+        
+        async function loadLeaderboard() {
+            try {
+                const res = await fetch('/api/leaderboard');
+                const users = await res.json();
+                const tbody = document.getElementById('leaderboardBody');
+                tbody.innerHTML = '';
+                users.forEach((user, index) => {
+                    const isCurrent = user.id == currentUserId;
+                    tbody.innerHTML += `<tr class="${isCurrent ? 'current-user' : ''}">
+                        <td>${index + 1}${index === 0 ? ' 👑' : ''}</table>
+                        <td>${user.username} ${isCurrent ? '★' : ''}</td>
+                        <td><strong>${user.total_points}</strong></td>
+                        <td>${user.exactos || 0} 🎯</td>
+                        <td>${user.aciertos || 0} ✅</td>
+                    </tr>`;
+                });
+            } catch(e) { console.log('Error leaderboard'); }
+        }
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            if (tabName === 'tabla') loadLeaderboard();
+        }
+        
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            localStorage.clear();
+            window.location.href = '/index.html';
+        }
+        
+        async function getUserInfo() {
+            try {
+                const res = await fetch('/api/me');
+                const data = await res.json();
+                if (data.loggedIn && data.user.role !== 'admin') {
+                    currentUserId = data.user.id;
+                    loadUserStats();
+                    loadLeaderboard();
+                } else if (data.loggedIn && data.user.role === 'admin') {
+                    window.location.href = '/admin.html';
+                } else {
+                    window.location.href = '/index.html';
+                }
+            } catch(e) {
+                window.location.href = '/index.html';
+            }
+        }
+        
+        getUserInfo();
+        loadJornadas();
+    </script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Quiniela Liguilla MX 2026</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 24px; overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 24px 32px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .btn { background: white; color: #667eea; border: none; padding: 10px 20px; border-radius: 12px; cursor: pointer; font-weight: 600; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-api { background: #10b981; color: white; }
+        .btn-master { background: #8b5cf6; color: white; }
+        .tabs { display: flex; background: #f1f5f9; padding: 0 20px; gap: 8px; flex-wrap: wrap; }
+        .tab { padding: 16px 24px; cursor: pointer; font-weight: 600; color: #64748b; border-bottom: 3px solid transparent; }
+        .tab.active { color: #667eea; border-bottom-color: #667eea; background: white; }
+        .tab-content { display: none; padding: 32px; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .card { background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px; border-left: 4px solid #667eea; }
+        input, select { padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; margin: 5px; }
+        button { background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin: 5px; }
+        button:hover { background: #5a67d8; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; }
+        .match-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
+        .match-teams { font-weight: bold; font-size: 16px; margin-bottom: 8px; }
+        .flex-row { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; }
+        .master-box { background: #fef3c7; padding: 15px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #f59e0b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👑 Panel de Administración - Quiniela 2026</h1>
+            <button class="btn" onclick="logout()">Cerrar sesión</button>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('jornadas')">📅 Jornadas</div>
+            <div class="tab" onclick="showTab('partidos')">⚽ Partidos</div>
+            <div class="tab" onclick="showTab('usuarios')">👥 Usuarios</div>
+            <div class="tab" onclick="showTab('codigo')">🔑 Código de registro</div>
+        </div>
+        
+        <!-- Jornadas -->
+        <div id="jornadas" class="tab-content active">
+            <div class="card">
+                <h3>📅 Gestionar Jornadas</h3>
+                <input type="text" id="jornadaName" placeholder="Nombre (ej: Cuartos de Final)">
+                <button onclick="createJornada()">➕ Crear jornada</button>
+                <button onclick="loadJornadas()">🔄 Actualizar</button>
+                <hr style="margin: 20px 0;">
+                <div id="jornadasList"></div>
+            </div>
+        </div>
+        
+        <!-- Partidos -->
+        <div id="partidos" class="tab-content">
+            <div class="card">
+                <h3>⚽ Gestionar Partidos</h3>
+                <div class="flex-row">
+                    <select id="jornadaSelectPartidos" onchange="loadMatchesAdmin()" style="min-width: 200px;">
+                        <option>Selecciona una jornada</option>
+                    </select>
+                    <button onclick="showAddMatchForm()" class="btn">➕ Agregar manual</button>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #f0fdf4; border-radius: 12px;">
+                    <h4>🌐 Traer partidos desde API</h4>
+                    <div class="flex-row">
+                        <button onclick="fetchAvailableMatches()" class="btn-api">🔍 Buscar partidos disponibles</button>
+                        <button onclick="assignSelectedMatches()" class="btn-master" id="assignBtn" disabled>📌 Asignar seleccionados a la jornada actual</button>
+                    </div>
+                    <div id="availableMatchesList" style="margin-top: 15px; max-height: 300px; overflow-y: auto;"></div>
+                </div>
+                
+                <div id="addMatchForm" style="display:none; margin-top: 15px; padding: 15px; background: #f1f5f9; border-radius: 12px;">
+                    <input type="text" id="homeTeam" placeholder="Equipo local">
+                    <input type="text" id="awayTeam" placeholder="Equipo visitante">
+                    <input type="datetime-local" id="matchDate">
+                    <button onclick="addMatch()">Guardar partido</button>
+                </div>
+                
+                <div id="matchesList" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+        
+        <!-- Usuarios -->
+        <div id="usuarios" class="tab-content">
+            <div class="card">
+                <h3>👥 Usuarios registrados</h3>
+                <button onclick="loadUsers()">🔄 Actualizar lista</button>
+                <div style="margin-top: 20px;">
+                    <table style="width:100%">
+                        <thead><tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Fecha registro</th></tr></thead>
+                        <tbody id="usersList"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Código maestro -->
+        <div id="codigo" class="tab-content">
+            <div class="card">
+                <h3>🔑 Código de registro para usuarios</h3>
+                <div class="master-box">
+                    <p style="margin-bottom: 10px;">Este es el código que los usuarios deben usar para registrarse. <strong>Todos usan el mismo código.</strong></p>
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="masterCode" style="font-family: monospace; font-size: 18px; text-transform: uppercase;" placeholder="Código maestro">
+                        <button onclick="updateMasterCode()" class="btn-master">💾 Guardar código</button>
+                    </div>
+                    <p style="margin-top: 10px; font-size: 12px; color: #666;">⚠️ El código no caduca y puede ser usado por múltiples usuarios</p>
+                </div>
+                <button onclick="loadMasterCode()">🔄 Cargar código actual</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let partidosDisponibles = [];
+        
+        // ========== JORNADAS ==========
+        async function loadJornadas() {
+            const res = await fetch('/api/admin/jornadas');
+            const jornadas = await res.json();
+            const container = document.getElementById('jornadasList');
+            container.innerHTML = '';
+            jornadas.forEach(j => {
+                const closeTimeDisplay = j.close_time ? new Date(j.close_time).toLocaleString() : 'No configurado';
+                container.innerHTML += `
+                    <div class="match-card">
+                        <div class="match-teams">${j.name}</div>
+                        <div>📅 Publicada: ${j.published ? '✅ Sí' : '⏳ No'}</div>
+                        <div>🔒 Pronósticos: ${j.closed ? 'Cerrados' : 'Abiertos'}</div>
+                        <div>⏰ Cierre auto: ${closeTimeDisplay}</div>
+                        <div style="margin-top: 10px;">
+                            ${!j.published ? `<button onclick="publishJornada(${j.id})">📢 Publicar</button>` : ''}
+                            <button onclick="toggleCloseJornada(${j.id}, ${!j.closed})" style="background: ${j.closed ? '#f59e0b' : '#10b981'}">
+                                ${j.closed ? '🔓 Abrir pronósticos' : '🔒 Cerrar pronósticos'}
+                            </button>
+                            <button onclick="configurarCierreAuto(${j.id})" style="background: #8b5cf6;">⏰ Configurar cierre auto</button>
+                            <button onclick="deleteJornada(${j.id}, '${j.name.replace(/'/g, "\\'")}')" style="background:#ef4444;">🗑️ Eliminar</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            const select = document.getElementById('jornadaSelectPartidos');
+            select.innerHTML = '<option value="">Selecciona una jornada</option>';
+            jornadas.forEach(j => {
+                select.innerHTML += `<option value="${j.id}">${j.name}</option>`;
+            });
+        }
+        
+        async function createJornada() {
+            const name = document.getElementById('jornadaName').value;
+            if (!name) return alert('Ingresa un nombre');
+            const res = await fetch('/api/admin/jornada', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (res.ok) {
+                alert('✅ Jornada creada');
+                document.getElementById('jornadaName').value = '';
+                loadJornadas();
+            } else {
+                alert('❌ Error al crear jornada');
+            }
+        }
+        
+        async function publishJornada(id) {
+            await fetch(`/api/admin/jornada/${id}/publish`, { method: 'POST' });
+            alert('✅ Jornada publicada');
+            loadJornadas();
+        }
+        
+        async function toggleCloseJornada(id, cerrar) {
+            const accion = cerrar ? 'cerrar' : 'abrir';
+            if (confirm(`¿${cerrar ? 'Cerrar' : 'Abrir'} los pronósticos para esta jornada?\n\n${cerrar ? '⚠️ Los usuarios ya NO podrán modificar sus pronósticos.' : '✅ Los usuarios podrán modificar sus pronósticos nuevamente.'}`)) {
+                const res = await fetch(`/api/admin/jornada/${id}/toggle-close`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ closed: cerrar ? 1 : 0 })
+                });
+                if (res.ok) {
+                    alert(`✅ Pronósticos ${cerrar ? 'cerrados' : 'abiertos'}`);
+                    loadJornadas();
+                }
+            }
+        }
+        
+        function configurarCierreAuto(jornadaId) {
+            const fechaInput = prompt('Ingresa fecha y hora de cierre (ej: 2026-05-03 18:00)\n\n⚠️ A esa hora se cerrarán automáticamente los pronósticos');
+            if (fechaInput) {
+                const fecha = new Date(fechaInput);
+                if (isNaN(fecha.getTime())) {
+                    alert('❌ Formato inválido. Usa: AAAA-MM-DD HH:MM');
+                    return;
+                }
+                fetch(`/api/admin/jornada/${jornadaId}/set-close-time`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ close_time: fecha.toISOString() })
+                }).then(() => {
+                    alert('✅ Cierre automático configurado');
+                    loadJornadas();
+                });
+            }
+        }
+        
+        async function deleteJornada(id, nombre) {
+            if (confirm(`¿Eliminar "${nombre}"?`)) {
+                await fetch(`/api/admin/jornada/${id}`, { method: 'DELETE' });
+                alert('✅ Eliminada');
+                loadJornadas();
+            }
+        }
+        
+        // ========== PARTIDOS ==========
+        function showAddMatchForm() {
+            const form = document.getElementById('addMatchForm');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        async function addMatch() {
+            const jornadaId = document.getElementById('jornadaSelectPartidos').value;
+            const home = document.getElementById('homeTeam').value;
+            const away = document.getElementById('awayTeam').value;
+            const datetime = document.getElementById('matchDate').value;
+            
+            if (!jornadaId || !home || !away) {
+                alert('Completa todos los campos');
+                return;
+            }
+            
+            const res = await fetch('/api/admin/match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jornada_id: jornadaId, home_team: home, away_team: away, datetime })
+            });
+            if (res.ok) {
+                alert('✅ Partido agregado');
+                document.getElementById('homeTeam').value = '';
+                document.getElementById('awayTeam').value = '';
+                document.getElementById('addMatchForm').style.display = 'none';
+                loadMatchesAdmin();
+            }
+        }
+        
+        async function loadMatchesAdmin() {
+            const jornadaId = document.getElementById('jornadaSelectPartidos').value;
+            if (!jornadaId) return;
+            const res = await fetch(`/api/admin/matches/${jornadaId}`);
+            const matches = await res.json();
+            const container = document.getElementById('matchesList');
+            container.innerHTML = '<h4>Partidos en esta jornada:</h4>';
+            if (matches.length === 0) {
+                container.innerHTML += '<div class="match-card">📭 No hay partidos</div>';
+                return;
+            }
+            matches.forEach(m => {
+                container.innerHTML += `
+                    <div class="match-card">
+                        <div class="match-teams">${m.home_team} vs ${m.away_team}</div>
+                        <div>📅 ${m.datetime || 'Fecha por definir'}</div>
+                        <div>Estado: ${m.status === 'finished' ? '✅ Finalizado' : '⏳ Pendiente'}</div>
+                        ${m.status !== 'finished' ? `
+                            <div style="margin-top: 10px;">
+                                <input type="number" id="home_${m.id}" placeholder="Local" style="width:60px;">
+                                <input type="number" id="away_${m.id}" placeholder="Visita" style="width:60px;">
+                                <button onclick="setResult(${m.id})">Registrar resultado</button>
+                            </div>
+                        ` : `<div>🏁 Resultado: ${m.home_score} - ${m.away_score}</div>`}
+                    </div>
+                `;
+            });
+        }
+        
+        async function setResult(matchId) {
+            const home = document.getElementById(`home_${matchId}`).value;
+            const away = document.getElementById(`away_${matchId}`).value;
+            if (!home || !away) return alert('Ingresa ambos marcadores');
+            await fetch(`/api/admin/set-result/${matchId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ home_score: parseInt(home), away_score: parseInt(away) })
+            });
+            alert('✅ Resultado registrado');
+            loadMatchesAdmin();
+        }
+        
+        // ========== API CON SELECCIÓN ==========
+        async function fetchAvailableMatches() {
+            alert('🔄 Buscando partidos...');
+            try {
+                const res = await fetch('/api/fetch-available-matches');
+                const data = await res.json();
+                
+                if (data.success && data.matches && data.matches.length > 0) {
+                    partidosDisponibles = data.matches;
+                    const container = document.getElementById('availableMatchesList');
+                    
+                    const grouped = {};
+                    partidosDisponibles.forEach(m => {
+                        if (!grouped[m.fecha]) grouped[m.fecha] = [];
+                        grouped[m.fecha].push(m);
+                    });
+                    
+                    let html = '<strong>📋 Partidos disponibles:</strong><br><br>';
+                    for (const [fecha, partidos] of Object.entries(grouped)) {
+                        html += `<div style="margin-bottom: 15px;"><strong>📅 ${fecha}</strong><br>`;
+                        partidos.forEach(p => {
+                            html += `
+                                <label style="display: block; margin: 5px 0;">
+                                    <input type="checkbox" value="${p.id}" class="match-checkbox" ${p.asignado ? 'disabled' : ''}>
+                                    ${p.home} vs ${p.away} ${p.asignado ? '(ya asignado)' : ''}
+                                </label>
+                            `;
+                        });
+                        html += `</div>`;
+                    }
+                    container.innerHTML = html;
+                    document.getElementById('assignBtn').disabled = false;
+                } else {
+                    alert('⚠️ No se encontraron partidos');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+        
+        async function assignSelectedMatches() {
+            const jornadaId = document.getElementById('jornadaSelectPartidos').value;
+            if (!jornadaId) {
+                alert('❌ Selecciona una jornada primero');
+                return;
+            }
+            
+            const checkboxes = document.querySelectorAll('.match-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('❌ Selecciona al menos un partido');
+                return;
+            }
+            
+            const matchesIds = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (confirm(`¿Asignar ${matchesIds.length} partido(s) a esta jornada?`)) {
+                const res = await fetch('/api/admin/assign-matches', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ matchesIds, jornadaId: parseInt(jornadaId) })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ ${data.asignados} partidos asignados`);
+                    fetchAvailableMatches();
+                    loadMatchesAdmin();
+                } else {
+                    alert('❌ Error al asignar');
+                }
+            }
+        }
+        
+        // ========== USUARIOS ==========
+        async function loadUsers() {
+            const res = await fetch('/api/admin/users');
+            const users = await res.json();
+            const tbody = document.getElementById('usersList');
+            tbody.innerHTML = '';
+            users.forEach(u => {
+                tbody.innerHTML += `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.role}</td><td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td></table>`;
+            });
+        }
+        
+        // ========== CÓDIGO MAESTRO ==========
+        async function loadMasterCode() {
+            const res = await fetch('/api/admin/master-code');
+            const data = await res.json();
+            document.getElementById('masterCode').value = data.code;
+        }
+        
+        async function updateMasterCode() {
+            const code = document.getElementById('masterCode').value.toUpperCase().trim();
+            if (!code) return alert('Ingresa un código');
+            const res = await fetch('/api/admin/master-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            if (res.ok) {
+                alert('✅ Código actualizado');
+            } else {
+                alert('❌ Error al actualizar');
+            }
+        }
+        
+        // ========== GENERAL ==========
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            if (tabName === 'jornadas') loadJornadas();
+            if (tabName === 'usuarios') loadUsers();
+            if (tabName === 'codigo') loadMasterCode();
+            if (tabName === 'partidos') loadJornadas();
+        }
+        
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/index.html';
+        }
+        
+        loadJornadas();
+        loadMasterCode();
+    </script>
+</body>
+</html>
